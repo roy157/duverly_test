@@ -1,0 +1,13 @@
+{
+  "permissions": {
+    "allow": [
+      "PowerShell(git config --global user.email \"josegunbound@gmail.com\")",
+      "PowerShell(git config --global user.name \"roy157\")",
+      "PowerShell(git config --global credential.helper store)",
+      "PowerShell(cd \"D:\\\\FILTRATUPLACA\\\\DUVERLY BOT GITHUB\"; $token = Read-Host \"Pega aquí el token de GitHub que copiaste\" -AsSecureString; $tokenPlain = [System.Runtime.InteropServices.Marshal]::PtrToStringAuto\\([System.Runtime.InteropServices.Marshal]::SecureStringToCoTaskMemUnicode\\($token\\)\\); git push -u \"https://roy157:${tokenPlain}@github.com/roy157/duverly_test.git\" main)",
+      "Bash(rm mientras.txt)",
+      "Bash(git add *)",
+      "Bash(git commit *)"
+    ]
+  }
+}
