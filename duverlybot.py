@@ -884,4 +884,4 @@ if __name__ == '__main__':
     except KeyboardInterrupt:
         print("Bot detenido por el usuario.")
     finally:
-        loop.close()S
+        loop.close()
