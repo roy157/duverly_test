@@ -1,5 +1,0 @@
-generar_session.py
-*.pyc
-__pycache__/
-.env
-sesion_hugo/
