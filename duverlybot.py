@@ -8,6 +8,7 @@ import asyncio
 import os
 import threading
 import re
+import unicodedata
 import urllib.parse
 from http.server import BaseHTTPRequestHandler, HTTPServer
 import time
@@ -40,6 +41,12 @@ try:
     BOT_TOKEN = os.environ["BOT_TOKEN"]
 except KeyError as e:
     raise ValueError(f"❌ Falta variable de entorno obligatoria: {e}")
+
+def normalizar_unicode(texto):
+    """Convierte letras Unicode estilizadas (ej. fuentes bold/matemáticas que
+    usan algunos proveedores) a sus equivalentes ASCII normales, para que
+    las comparaciones de texto (ej. 'SIN RESULTADOS') funcionen siempre."""
+    return unicodedata.normalize('NFKD', texto)
 
 TXT_FRANCHESCO = "FRANCHESCO"
 TXT_GHOSTOPS   = "DF VIP"
@@ -631,7 +638,7 @@ async def main():
         texto_a_buscar = ""
 
         if event.message.text:
-            texto_a_buscar = event.message.text.upper()
+            texto_a_buscar = normalizar_unicode(event.message.text).upper()
         if event.message.media and event.message.document:
             for attr in event.message.document.attributes:
                 if hasattr(attr, 'file_name') and attr.file_name:
@@ -740,7 +747,7 @@ async def main():
 
         # Entrega de Texto
         elif event.message.text:
-            texto_grupo = event.message.text.upper()
+            texto_grupo = normalizar_unicode(event.message.text).upper()
 
             if texto_grupo.startswith(('/TIVE', '/TIV', '/PLA', '/PARTI', '/BOI', '/BOLI', '/BOLETA', '/DENPLA', '/DENUNV', '/PROP')) and len(texto_grupo) < 15 and "NO SE" not in texto_grupo:
                 return
@@ -804,7 +811,7 @@ async def main():
             if origen_texto == "NORTH DATA":
                 es_error_north = any(err in texto_grupo for err in ["NO SE HAN ENCONTRADO DATOS", "NOT FOUND DATA", "NO SE ENCONTRÓ", "NO SE ENCONTRO", "NO SE HALLARON", "SIN RESULTADOS", "ERROR", "NO EXISTE", "NO CUENTA CON TIVE"])
                 if es_error_north:
-                    texto_original = event.message.text
+                    texto_original = normalizar_unicode(event.message.text)
                     reporte_recortado = "⚠️ Sin resultados o no cuenta con TIVE."
                     if "NO CUENTA CON TIVE" in texto_original.upper():
                         for linea in texto_original.split('\n'):
@@ -825,7 +832,7 @@ async def main():
                 else:
                     return
 
-            texto_original = event.message.text
+            texto_original = normalizar_unicode(event.message.text)
             lineas_limpias = []
             for linea in texto_original.split('\n'):
                 if "CONSULTADO POR" in linea.upper() or "CREDITOS" in linea.upper(): break
