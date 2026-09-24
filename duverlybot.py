@@ -130,6 +130,7 @@ id_kimico     = None
 
 control_operaciones = {}
 north_respondido_exito = {}
+pdf_recibido_por_operacion = {}
 imagenes_procesadas_recientes = []
 
 async def mapear_motores_por_id():
@@ -193,7 +194,7 @@ async def flujo_especial_north(placa, clave_operacion):
             print(f"❌ Error en envío de /tive a North: {e}")
 
 def liberar_operacion_de_memoria(clave_operacion):
-    global control_operaciones, north_respondido_exito
+    global control_operaciones, north_respondido_exito, pdf_recibido_por_operacion
     if clave_operacion in control_operaciones:
         msg_carga = control_operaciones[clave_operacion].get("msg_carga")
         if msg_carga:
@@ -207,9 +208,25 @@ def liberar_operacion_de_memoria(clave_operacion):
     if clave_operacion in north_respondido_exito:
         del north_respondido_exito[clave_operacion]
 
+    if clave_operacion in pdf_recibido_por_operacion:
+        del pdf_recibido_por_operacion[clave_operacion]
+
 async def timeout_seguridad_operacion(clave_operacion, segundos=90):
     await asyncio.sleep(segundos)
-    global control_operaciones
+    global control_operaciones, entidad_north_bot
+    if clave_operacion not in control_operaciones:
+        return
+
+    op_data = control_operaciones[clave_operacion]
+    if op_data["origen"] == "TIVE" and not pdf_recibido_por_operacion.get(clave_operacion) and entidad_north_bot:
+        placa = op_data["placa"]
+        print(f"🔁 [TIVE] Nadie entregó PDF para {placa}. Probando /insve en North Data como último recurso...")
+        try:
+            await client.send_message(entidad_north_bot, f"/insve {placa}")
+        except Exception as e:
+            print(f"❌ Error al enviar /insve a North: {e}")
+        await asyncio.sleep(20)
+
     if clave_operacion in control_operaciones:
         print(f"⏱️ [TIME-OUT] Forzando liberación de [{clave_operacion}] ({segundos}s).")
         liberar_operacion_de_memoria(clave_operacion)
@@ -732,6 +749,7 @@ async def main():
 
             if origen_texto == "NORTH DATA":
                 north_respondido_exito[op_encontrada] = True
+            pdf_recibido_por_operacion[op_encontrada] = True
 
             ruta = await event.message.download_media(file=nombre_original)
             tipo_identificador = "👤 DNI" if control_operaciones[op_encontrada]["origen"] == "PARTIDADNI" else "🏁 Placa/Partida"
