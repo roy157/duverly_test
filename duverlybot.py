@@ -802,7 +802,7 @@ async def main():
                         return
 
             if origen_texto == "NORTH DATA":
-                es_error_north = any(err in texto_grupo for err in ["NO SE HAN ENCONTRADO DATOS", "NOT FOUND DATA", "NO SE ENCONTRÓ", "NO SE ENCONTRO", "NO SE HALLARON", "ERROR", "NO EXISTE", "NO CUENTA CON TIVE"])
+                es_error_north = any(err in texto_grupo for err in ["NO SE HAN ENCONTRADO DATOS", "NOT FOUND DATA", "NO SE ENCONTRÓ", "NO SE ENCONTRO", "NO SE HALLARON", "SIN RESULTADOS", "ERROR", "NO EXISTE", "NO CUENTA CON TIVE"])
                 if es_error_north:
                     texto_original = event.message.text
                     reporte_recortado = "⚠️ Sin resultados o no cuenta con TIVE."
