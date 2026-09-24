@@ -60,7 +60,7 @@ def normalizar_unicode(texto):
 
 TXT_FRANCHESCO = "FRANCHESCO"
 TXT_GHOSTOPS   = "DF VIP"
-# TXT_KIMICO     = "K1M1CO B0Tx"  # [PAUSADO]
+TXT_KIMICO     = "KIMICO"  # nombre EXACTO del grupo/chat (sin contener texto extra)
 
 USER_NORTH_BOT = "northdatabasicbot"
 
@@ -129,11 +129,10 @@ async def mapear_motores_por_id():
                 id_ghostops = dialog.id
                 print(f"🎯 ID DF VIP [GRUPO 08] Fijado: {id_ghostops} ({dialog.name})")
 
-            # --- KIMICO PAUSADO TEMPORALMENTE ---
-            # elif "KIMICO" in nombre_chat_upper and "BOT" in nombre_chat_upper and not entidad_kimico:
-            #     entidad_kimico = dialog.input_entity
-            #     id_kimico = dialog.id
-            #     print(f"🎯 ID KIMICO BOT Fijado: {id_kimico} ({dialog.name})")
+            elif nombre_chat_upper == TXT_KIMICO and not entidad_kimico:
+                entidad_kimico = dialog.input_entity
+                id_kimico = dialog.id
+                print(f"🎯 ID KIMICO Fijado: {id_kimico} ({dialog.name})")
 
     try:
         entidad_north_bot = await client.get_input_entity(USER_NORTH_BOT)
@@ -274,8 +273,8 @@ def recibir_orden_tive_global(message):
         "motores": {
             "DF VIP": False,
             "FRANCHESCO": False,
-            "NORTH DATA": False
-            # "KIMICO": False  <-- [PAUSADO]
+            "NORTH DATA": False,
+            "KIMICO": False
         }
     }
 
@@ -283,11 +282,10 @@ def recibir_orden_tive_global(message):
         asyncio.run_coroutine_threadsafe(client.send_message(entidad_franchesco, f"/tive {placa}"), loop_principal)
     if entidad_ghostops:
         asyncio.run_coroutine_threadsafe(client.send_message(entidad_ghostops, f"/tive {placa}"), loop_principal)
-    
-    # --- KIMICO PAUSADO TEMPORALMENTE ---
-    # if entidad_kimico:
-    #     asyncio.run_coroutine_threadsafe(client.send_message(entidad_kimico, f"/pla {placa}"), loop_principal)
-    
+
+    if entidad_kimico:
+        asyncio.run_coroutine_threadsafe(client.send_message(entidad_kimico, f"/pla {placa}"), loop_principal)
+
     if entidad_north_bot:
         asyncio.run_coroutine_threadsafe(flujo_especial_north(placa, clave_operacion), loop_principal)
 
@@ -320,8 +318,8 @@ def recibir_orden_boleta_global(message):
         "motores": {
             "DF VIP": False,
             "FRANCHESCO": False,
-            "NORTH DATA": False
-            # "KIMICO": False  <-- [PAUSADO]
+            "NORTH DATA": False,
+            "KIMICO": False
         }
     }
 
@@ -329,11 +327,10 @@ def recibir_orden_boleta_global(message):
         asyncio.run_coroutine_threadsafe(client.send_message(entidad_franchesco, f"/boi {placa}"), loop_principal)
     if entidad_ghostops:
         asyncio.run_coroutine_threadsafe(client.send_message(entidad_ghostops, f"/boi {placa}"), loop_principal)
-    
-    # --- KIMICO PAUSADO TEMPORALMENTE ---
-    # if entidad_kimico:
-    #     asyncio.run_coroutine_threadsafe(client.send_message(entidad_kimico, f"/boleta {placa}"), loop_principal)
-    
+
+    if entidad_kimico:
+        asyncio.run_coroutine_threadsafe(client.send_message(entidad_kimico, f"/boleta {placa}"), loop_principal)
+
     if entidad_north_bot:
         asyncio.run_coroutine_threadsafe(client.send_message(entidad_north_bot, f"/bolif {placa}"), loop_principal)
 
@@ -478,17 +475,16 @@ def recibir_orden_rq_global(message):
         "origen": "RQ",
         "msg_carga": msg_carga,
         "motores": {
-            "NORTH DATA": False
-            # "KIMICO": False  <-- [PAUSADO]
+            "NORTH DATA": False,
+            "KIMICO": False
         }
     }
 
     if entidad_north_bot:
         asyncio.run_coroutine_threadsafe(client.send_message(entidad_north_bot, f"/rqpla {placa}"), loop_principal)
-    
-    # --- KIMICO PAUSADO TEMPORALMENTE ---
-    # if entidad_kimico:
-    #     asyncio.run_coroutine_threadsafe(client.send_message(entidad_kimico, f"/rqpla {placa}"), loop_principal)
+
+    if entidad_kimico:
+        asyncio.run_coroutine_threadsafe(client.send_message(entidad_kimico, f"/rqpla {placa}"), loop_principal)
 
     asyncio.run_coroutine_threadsafe(timeout_seguridad_operacion(clave_operacion, 90), loop_principal)
 
@@ -639,7 +635,7 @@ async def main():
         if id_franchesco and chat_actual_id == id_franchesco: origen_texto = "FRANCHESCO"
         elif id_ghostops and chat_actual_id == id_ghostops: origen_texto = "DF VIP"
         elif id_north_bot and chat_actual_id == id_north_bot: origen_texto = "NORTH DATA"
-        # elif id_kimico and chat_actual_id == id_kimico: origen_texto = "KIMICO"  # [PAUSADO]
+        elif id_kimico and chat_actual_id == id_kimico: origen_texto = "KIMICO"
 
         if origen_texto == "DESCONOCIDO": return
 
@@ -675,7 +671,7 @@ async def main():
                         else:
                             continue
 
-                    if origen_texto == "NORTH DATA":
+                    if origen_texto in ["NORTH DATA", "KIMICO"]:
                         if op_data["origen"] in ["TIVE", "BOLETA", "RQ"]:
                             op_encontrada = clave
                             placa_detectada = op_data["placa"]
@@ -722,7 +718,7 @@ async def main():
             return
 
         # Entrega de Fotos
-        elif event.message.media and event.message.photo and origen_texto in ["FRANCHESCO", "NORTH DATA"]:
+        elif event.message.media and event.message.photo and origen_texto in ["FRANCHESCO", "NORTH DATA", "KIMICO"]:
             comando_origen = control_operaciones[op_encontrada]["origen"]
             caption_proveedor = event.message.message if event.message.message else ""
 
