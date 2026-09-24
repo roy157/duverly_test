@@ -8,6 +8,7 @@ import asyncio
 import os
 import threading
 import re
+import html
 import unicodedata
 import urllib.parse
 from http.server import BaseHTTPRequestHandler, HTTPServer
@@ -68,12 +69,18 @@ def _limpiar_clave_campo(campo):
 
 def filtrar_campos_kimico(texto):
     """De la respuesta completa de Kimico (que trae muchos campos), deja
-    solo los campos en CAMPOS_KIMICO_PERMITIDOS, en su orden original."""
+    solo los campos en CAMPOS_KIMICO_PERMITIDOS, en su orden original, y
+    envuelve el valor en <code> para que se pueda copiar con un toque."""
     lineas_filtradas = []
     for linea in texto.split('\n'):
         match = re.match(r'^\s*·\s*(.+?)\s*·\s*(.+)$', linea)
-        if match and _limpiar_clave_campo(match.group(1)) in CAMPOS_KIMICO_PERMITIDOS:
-            lineas_filtradas.append(linea.strip())
+        if not match:
+            continue
+        campo = match.group(1).strip()
+        if _limpiar_clave_campo(campo) not in CAMPOS_KIMICO_PERMITIDOS:
+            continue
+        valor = html.escape(match.group(2).strip().strip('`').strip())
+        lineas_filtradas.append(f"· {html.escape(campo)} : <code>{valor}</code>")
     return "\n".join(lineas_filtradas)
 
 TXT_FRANCHESCO = "FRANCHESCO"
