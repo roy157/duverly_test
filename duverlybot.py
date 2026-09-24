@@ -713,7 +713,7 @@ async def main():
             if any(carga in caption_proveedor.upper() for carga in palabras_carga_imagen):
                 return
 
-            if origen_texto == "NORTH DATA" and comando_origen == "TIVE":
+            if origen_texto == "NORTH DATA" and comando_origen in ["TIVE", "RQ"]:
                 return
 
             if origen_texto == "FRANCHESCO" and comando_origen in ["TIVE", "BOLETA", "DENUNCIAS"]:
