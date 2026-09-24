@@ -58,6 +58,24 @@ def normalizar_unicode(texto):
     texto = unicodedata.normalize('NFKD', texto)
     return texto.translate(_TABLA_VERSALITAS)
 
+CAMPOS_KIMICO_PERMITIDOS = {"placa", "npartida", "oficina", "nombre", "doc", "fprop"}
+
+def _limpiar_clave_campo(campo):
+    campo = campo.lower().strip()
+    for viejo, nuevo in {"á": "a", "é": "e", "í": "i", "ó": "o", "ú": "u", "ñ": "n", "°": "", "º": ""}.items():
+        campo = campo.replace(viejo, nuevo)
+    return re.sub(r'[^a-z0-9]', '', campo)
+
+def filtrar_campos_kimico(texto):
+    """De la respuesta completa de Kimico (que trae muchos campos), deja
+    solo los campos en CAMPOS_KIMICO_PERMITIDOS, en su orden original."""
+    lineas_filtradas = []
+    for linea in texto.split('\n'):
+        match = re.match(r'^\s*·\s*(.+?)\s*·\s*(.+)$', linea)
+        if match and _limpiar_clave_campo(match.group(1)) in CAMPOS_KIMICO_PERMITIDOS:
+            lineas_filtradas.append(linea.strip())
+    return "\n".join(lineas_filtradas)
+
 TXT_FRANCHESCO = "FRANCHESCO"
 TXT_GHOSTOPS   = "DF VIP"
 TXT_KIMICO     = "KIMICO"  # nombre EXACTO del grupo/chat (sin contener texto extra)
@@ -866,6 +884,31 @@ async def main():
                     return
                 else:
                     return
+
+            if origen_texto == "KIMICO":
+                es_error_kimico = any(err in texto_grupo for err in ["NO SE ENCONTRÓ", "NO SE ENCONTRO", "SIN RESULTADOS", "ERROR", "NO EXISTE"])
+                msg_carga = control_operaciones[op_encontrada].get("msg_carga")
+
+                if es_error_kimico:
+                    if msg_carga:
+                        try: bot.delete_message(msg_carga.chat.id, msg_carga.message_id)
+                        except Exception: pass
+                    bot.send_message(chat_id_hugo, f"📢 <b>Respuesta de [{origen_texto}]:</b>\n🏁 Placa/Partida: <code>{placa_detectada}</code>\n\n❌ No se encontró información.", parse_mode="HTML")
+                    verificar_y_marcar_respuesta(op_encontrada, origen_texto)
+                    return
+
+                texto_original = normalizar_unicode(event.message.text)
+                campos_filtrados = filtrar_campos_kimico(texto_original)
+                if not campos_filtrados:
+                    return
+
+                if msg_carga:
+                    try: bot.delete_message(msg_carga.chat.id, msg_carga.message_id)
+                    except Exception: pass
+
+                bot.send_message(chat_id_hugo, f"📢 <b>Respuesta de [{origen_texto}]:</b>\n🏁 Placa/Partida: <code>{placa_detectada}</code>\n\n{campos_filtrados}", parse_mode="HTML")
+                verificar_y_marcar_respuesta(op_encontrada, origen_texto)
+                return
 
             texto_original = normalizar_unicode(event.message.text)
             lineas_limpias = []
