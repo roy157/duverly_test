@@ -716,11 +716,26 @@ async def main():
             comando_origen = control_operaciones[op_encontrada]["origen"]
             caption_proveedor = event.message.message if event.message.message else ""
 
+            caption_normalizada = normalizar_unicode(caption_proveedor).upper()
+
             palabras_carga_imagen = ["CONSULTANDO PLACA", "POR FAVOR ESPERA", "ESTAMOS PROCESANDO", "UN MOMENTO PORFAVOR", "UN MOMENTO POR FAVOR", "PROCESANDO TU SOLICITUD"]
-            if any(carga in caption_proveedor.upper() for carga in palabras_carga_imagen):
+            if any(carga in caption_normalizada for carga in palabras_carga_imagen):
                 return
 
-            if origen_texto == "NORTH DATA" and comando_origen in ["TIVE", "RQ"]:
+            if origen_texto == "NORTH DATA" and comando_origen == "RQ":
+                palabras_error_rq = ["SIN RESULTADOS", "NO SE HAN ENCONTRADO DATOS", "NOT FOUND DATA", "NO SE ENCONTRÓ", "NO SE ENCONTRO", "NO SE HALLARON", "ERROR", "NO EXISTE", "NO CUENTA CON TIVE"]
+                if any(err in caption_normalizada for err in palabras_error_rq):
+                    msg_carga = control_operaciones[op_encontrada].get("msg_carga")
+                    if msg_carga:
+                        try: bot.delete_message(msg_carga.chat.id, msg_carga.message_id)
+                        except Exception: pass
+
+                    reporte_rq = caption_proveedor.strip() or "⚠️ Sin resultados."
+                    bot.send_message(chat_id_hugo, f"📢 <b>Respuesta de [{origen_texto}]:</b>\n🏁 Placa/Partida: <code>{placa_detectada}</code>\n\n{reporte_rq}", parse_mode="HTML")
+                    verificar_y_marcar_respuesta(op_encontrada, origen_texto)
+                return
+
+            if origen_texto == "NORTH DATA" and comando_origen == "TIVE":
                 return
 
             if origen_texto == "FRANCHESCO" and comando_origen in ["TIVE", "BOLETA", "DENUNCIAS"]:
