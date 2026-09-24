@@ -42,11 +42,21 @@ try:
 except KeyError as e:
     raise ValueError(f"❌ Falta variable de entorno obligatoria: {e}")
 
+_TABLA_VERSALITAS = str.maketrans({
+    'ᴀ': 'a', 'ʙ': 'b', 'ᴄ': 'c', 'ᴅ': 'd', 'ᴇ': 'e',
+    'ꜰ': 'f', 'ɢ': 'g', 'ʜ': 'h', 'ɪ': 'i', 'ᴊ': 'j',
+    'ᴋ': 'k', 'ʟ': 'l', 'ᴍ': 'm', 'ɴ': 'n', 'ᴏ': 'o',
+    'ᴘ': 'p', 'ʀ': 'r', 'ʁ': 'r', 'ᴛ': 't', 'ᴜ': 'u',
+    'ᴠ': 'v', 'ᴡ': 'w', 'ʏ': 'y', 'ᴢ': 'z',
+})
+
 def normalizar_unicode(texto):
-    """Convierte letras Unicode estilizadas (ej. fuentes bold/matemáticas que
-    usan algunos proveedores) a sus equivalentes ASCII normales, para que
-    las comparaciones de texto (ej. 'SIN RESULTADOS') funcionen siempre."""
-    return unicodedata.normalize('NFKD', texto)
+    """Convierte letras Unicode estilizadas (bold matemático, versalitas
+    fonéticas, etc. que usan algunos proveedores para dar formato) a sus
+    equivalentes ASCII normales, para que las comparaciones de texto
+    (ej. 'SIN RESULTADOS') funcionen siempre sin importar la fuente usada."""
+    texto = unicodedata.normalize('NFKD', texto)
+    return texto.translate(_TABLA_VERSALITAS)
 
 TXT_FRANCHESCO = "FRANCHESCO"
 TXT_GHOSTOPS   = "DF VIP"
