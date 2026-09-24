@@ -80,7 +80,12 @@ def filtrar_campos_kimico(texto):
         if _limpiar_clave_campo(campo) not in CAMPOS_KIMICO_PERMITIDOS:
             continue
         valor = html.escape(match.group(2).strip().strip('`').strip())
-        lineas_filtradas.append(f"· {html.escape(campo)} : <code>{valor}</code>")
+        campo_escapado = html.escape(campo)
+
+        if _limpiar_clave_campo(campo) == "oficina":
+            lineas_filtradas.append(f"<b>· {campo_escapado} : ✅ <code>{valor}</code></b>")
+        else:
+            lineas_filtradas.append(f"· {campo_escapado} : <code>{valor}</code>")
     return "\n".join(lineas_filtradas)
 
 TXT_FRANCHESCO = "FRANCHESCO"
