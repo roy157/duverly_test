@@ -211,22 +211,28 @@ def liberar_operacion_de_memoria(clave_operacion):
     if clave_operacion in pdf_recibido_por_operacion:
         del pdf_recibido_por_operacion[clave_operacion]
 
-async def timeout_seguridad_operacion(clave_operacion, segundos=90):
+async def intento_respaldo_insve(clave_operacion, segundos=40):
     await asyncio.sleep(segundos)
     global control_operaciones, entidad_north_bot
     if clave_operacion not in control_operaciones:
         return
+    if pdf_recibido_por_operacion.get(clave_operacion):
+        return
 
     op_data = control_operaciones[clave_operacion]
-    if op_data["origen"] == "TIVE" and not pdf_recibido_por_operacion.get(clave_operacion) and entidad_north_bot:
-        placa = op_data["placa"]
-        print(f"🔁 [TIVE] Nadie entregó PDF para {placa}. Probando /insve en North Data como último recurso...")
-        try:
-            await client.send_message(entidad_north_bot, f"/insve {placa}")
-        except Exception as e:
-            print(f"❌ Error al enviar /insve a North: {e}")
-        await asyncio.sleep(20)
+    if op_data["origen"] != "TIVE" or not entidad_north_bot:
+        return
 
+    placa = op_data["placa"]
+    print(f"🔁 [TIVE] A los {segundos}s nadie entregó PDF para {placa}. Probando /insve en North Data...")
+    try:
+        await client.send_message(entidad_north_bot, f"/insve {placa}")
+    except Exception as e:
+        print(f"❌ Error al enviar /insve a North: {e}")
+
+async def timeout_seguridad_operacion(clave_operacion, segundos=90):
+    await asyncio.sleep(segundos)
+    global control_operaciones
     if clave_operacion in control_operaciones:
         print(f"⏱️ [TIME-OUT] Forzando liberación de [{clave_operacion}] ({segundos}s).")
         liberar_operacion_de_memoria(clave_operacion)
@@ -336,6 +342,7 @@ def recibir_orden_tive_global(message):
     if entidad_north_bot:
         asyncio.run_coroutine_threadsafe(flujo_especial_north(placa, clave_operacion), loop_principal)
 
+    asyncio.run_coroutine_threadsafe(intento_respaldo_insve(clave_operacion, 40), loop_principal)
     asyncio.run_coroutine_threadsafe(timeout_seguridad_operacion(clave_operacion, 90), loop_principal)
 
 @bot.message_handler(commands=['boleta'])
