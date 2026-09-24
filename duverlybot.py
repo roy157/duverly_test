@@ -854,6 +854,20 @@ async def main():
                     else:
                         verificar_y_marcar_respuesta(op_encontrada, origen_texto)
                     return
+
+                elif comando_origen == "PLACA":
+                    texto_original = normalizar_unicode(event.message.text)
+                    lineas_limpias = [l for l in texto_original.split('\n') if "CONSULTADO POR" not in l.upper() and "CREDITOS" not in l.upper()]
+                    reporte_recortado = "\n".join(lineas_limpias).strip() or texto_original.strip()
+
+                    msg_carga = control_operaciones[op_encontrada].get("msg_carga")
+                    if msg_carga:
+                        try: bot.delete_message(msg_carga.chat.id, msg_carga.message_id)
+                        except Exception: pass
+
+                    bot.send_message(chat_id_hugo, f"📢 <b>Respuesta de [{origen_texto}]:</b>\n🏁 Placa: <code>{placa_detectada}</code>\n\n{reporte_recortado}", parse_mode="HTML")
+                    verificar_y_marcar_respuesta(op_encontrada, origen_texto)
+                    return
                 else:
                     return
 
