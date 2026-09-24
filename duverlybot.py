@@ -362,7 +362,7 @@ def recibir_orden_boleta_global(message):
         asyncio.run_coroutine_threadsafe(client.send_message(entidad_kimico, f"/boleta {placa}"), loop_principal)
 
     if entidad_north_bot:
-        asyncio.run_coroutine_threadsafe(client.send_message(entidad_north_bot, f"/bolif {placa}"), loop_principal)
+        asyncio.run_coroutine_threadsafe(client.send_message(entidad_north_bot, f"/boleta {placa}"), loop_principal)
 
     asyncio.run_coroutine_threadsafe(timeout_seguridad_operacion(clave_operacion, 90), loop_principal)
 
