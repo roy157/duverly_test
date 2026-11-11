@@ -13,6 +13,8 @@ import unicodedata
 import urllib.parse
 from http.server import BaseHTTPRequestHandler, HTTPServer
 import time
+import io
+import requests
 
 # --- SERVIDOR WEB DE SALUD PARA RENDER ---
 class FakeServer(BaseHTTPRequestHandler):
@@ -543,6 +545,96 @@ def recibir_orden_rq_global(message):
     asyncio.run_coroutine_threadsafe(timeout_seguridad_operacion(clave_operacion, 90), loop_principal)
 
 # =====================================================================
+# --- API FILTRA TU PLACA (/informe y /partida2) ---
+# =====================================================================
+FTP_API = "https://filtratuplaca.com/api/v1"
+FTP_CLAVE = os.environ.get("FILTRATUPLACA_API_KEY")
+FTP_INTERVALO = 10      # segundos entre cada consulta de avance
+FTP_MAX_ESPERA = 600    # tope de espera (10 min) por consulta
+
+class ErrorFiltraTuPlaca(Exception):
+    pass
+
+def ftp_pedir_pdf(tipo, placa):
+    """tipo: 'informe' o 'partida'. Devuelve los bytes del PDF."""
+    if not FTP_CLAVE:
+        raise ErrorFiltraTuPlaca("Falta configurar FILTRATUPLACA_API_KEY en el servidor.")
+    h = {"Authorization": f"Bearer {FTP_CLAVE}"}
+
+    r = requests.post(f"{FTP_API}/{tipo}", json={"placa": placa}, headers=h, timeout=30)
+    try:
+        datos = r.json()
+    except ValueError:
+        raise ErrorFiltraTuPlaca(f"Respuesta inválida del servidor (HTTP {r.status_code}).")
+    if not datos.get("exito"):
+        raise ErrorFiltraTuPlaca(datos.get("error") or f"Error HTTP {r.status_code}")
+    id_consulta = datos["id"]
+
+    inicio = time.time()
+    while True:
+        if time.time() - inicio > FTP_MAX_ESPERA:
+            raise ErrorFiltraTuPlaca("Tiempo de espera agotado. Intenta de nuevo más tarde.")
+        time.sleep(FTP_INTERVALO)
+        try:
+            e = requests.get(f"{FTP_API}/consultas/{id_consulta}", headers=h, timeout=30).json()
+        except (requests.RequestException, ValueError) as err:
+            print(f"⚠️ [FTP] Error consultando avance: {err}")
+            continue
+        if e.get("estado") == "listo":
+            break
+        if e.get("estado") == "error":
+            raise ErrorFiltraTuPlaca(e.get("mensaje") or "La consulta falló.")
+
+    pdf = requests.get(f"{FTP_API}/consultas/{id_consulta}/pdf", headers=h, timeout=60)
+    if pdf.status_code != 200:
+        raise ErrorFiltraTuPlaca(f"No se pudo descargar el PDF (HTTP {pdf.status_code}).")
+    return pdf.content
+
+def _procesar_ftp(message, tipo, comando, titulo):
+    texto = message.text.split()
+    if len(texto) < 2:
+        bot.reply_to(message, f"❌ Envía la placa. Ejemplo: /{comando} CAJ270")
+        return
+
+    placa = texto[1].upper().strip().replace("-", "").replace(" ", "")
+    msg_carga = None
+    try:
+        msg_carga = bot.reply_to(message, f"🔍 Generando {titulo} de {placa}...\n⏳ Puede tardar de 1 a 5 minutos.")
+    except Exception as e:
+        print(f"⚠️ Aviso de red: {e}")
+
+    def trabajo():
+        try:
+            contenido = ftp_pedir_pdf(tipo, placa)
+            archivo = io.BytesIO(contenido)
+            archivo.name = f"{tipo.upper()}_{placa}.pdf"
+            bot.send_document(message.chat.id, archivo,
+                              caption=f"✅ {titulo} de <b>{html.escape(placa)}</b>",
+                              parse_mode="HTML", reply_to_message_id=message.message_id)
+        except ErrorFiltraTuPlaca as e:
+            bot.send_message(message.chat.id, f"❌ {titulo} {placa}: {html.escape(str(e))}", parse_mode="HTML")
+        except Exception as e:
+            print(f"❌ [FTP] Error inesperado en {tipo} {placa}: {e}")
+            bot.send_message(message.chat.id, f"❌ Error inesperado al generar {titulo} de {placa}.")
+        finally:
+            if msg_carga:
+                try:
+                    bot.delete_message(msg_carga.chat.id, msg_carga.message_id)
+                except Exception:
+                    pass
+
+    # Hilo propio: la consulta tarda minutos y no debe bloquear al bot
+    threading.Thread(target=trabajo, daemon=True).start()
+
+@bot.message_handler(commands=['informe'])
+def recibir_orden_informe(message):
+    _procesar_ftp(message, "informe", "informe", "Informe completo")
+
+@bot.message_handler(commands=['partida2'])
+def recibir_orden_partida2(message):
+    _procesar_ftp(message, "partida", "partida2", "Partida SUNARP")
+
+# =====================================================================
 # --- PANEL INTERACTIVO Y MENÚ ---
 # =====================================================================
 
@@ -607,7 +699,13 @@ def responder_clicks_botones(call):
             "• Ejemplo: /nombre Cristian Condori Montoya\n\n"
             "8️⃣ <b>CONSULTA REQUERIMIENTO (RQ)</b>\n"
             "• Comando: /rq [placa]\n"
-            "• Ejemplo: /rq CAJ270"
+            "• Ejemplo: /rq CAJ270\n\n"
+            "9️⃣ <b>INFORME COMPLETO DEL VEHICULO (PDF)</b>\n"
+            "• Comando: /informe [placa]\n"
+            "• Ejemplo: /informe CAJ270\n\n"
+            "🔟 <b>PARTIDA SUNARP COMPLETA (PDF)</b>\n"
+            "• Comando: /partida2 [placa]\n"
+            "• Ejemplo: /partida2 CAJ270"
         )
         bot.edit_message_text(chat_id=call.message.chat.id, message_id=call.message.message_id, text=texto_vehiculos, parse_mode="HTML", reply_markup=markup_vehiculos)
 
