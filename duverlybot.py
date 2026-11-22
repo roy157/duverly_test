@@ -91,7 +91,7 @@ def filtrar_campos_kimico(texto):
     return "\n".join(lineas_filtradas)
 
 TXT_FRANCHESCO = "FRANCHESCO"
-TXT_GHOSTOPS   = "DF VIP"
+TXT_GHOSTOPS   = "DF V1p"
 TXT_KIMICO     = "XS DOX VIP"  # nombre EXACTO del grupo/chat (sin contener texto extra)
 
 USER_NORTH_BOT = "northdatabasicbot"
