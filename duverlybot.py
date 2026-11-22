@@ -91,8 +91,17 @@ def filtrar_campos_kimico(texto):
     return "\n".join(lineas_filtradas)
 
 TXT_FRANCHESCO = "FRANCHESCO"
-TXT_GHOSTOPS   = "DF V1p"
-TXT_KIMICO     = "XS DOX VIP"  # nombre EXACTO del grupo/chat (sin contener texto extra)
+TXT_FRIURUS    = "FRIURUS"   # grupo "FRIURUS DATA" (se ignora el emoji del nombre)
+# Proveedores que funcionan igual que Franchesco (mismos comandos y mismo filtrado)
+MOTORES_TIPO_FRANCHESCO = ["FRANCHESCO", "FRIURUS DATA"]
+# --- DF VIP DESACTIVADO TEMPORALMENTE (no está funcionando) ---
+# Para activarlo: quita el "#" de la primera línea y borra la línea "= None".
+# TXT_GHOSTOPS   = "DF VIP"
+TXT_GHOSTOPS   = None
+TXT_KIMICO     = "KIMICO DOX"  # nombre EXACTO del grupo/chat (sin contener texto extra)
+TXT_XSDOX      = "XS DOX VIP"  # nombre EXACTO del grupo/chat (sin contener texto extra)
+# Proveedores que funcionan igual que Kimico (mismos comandos y mismo filtrado)
+MOTORES_TIPO_KIMICO = ["KIMICO", "XS DOX VIP"]
 
 USER_NORTH_BOT = "northdatabasicbot"
 
@@ -121,14 +130,18 @@ chat_id_hugo = None
 loop_principal = None
 
 entidad_franchesco = None
+entidad_friurus    = None
 entidad_ghostops   = None
 entidad_north_bot  = None
 entidad_kimico     = None
+entidad_xsdox      = None
 
 id_franchesco = None
+id_friurus    = None
 id_ghostops   = None
 id_north_bot  = None
 id_kimico     = None
+id_xsdox      = None
 
 control_operaciones = {}
 north_respondido_exito = {}
@@ -136,8 +149,8 @@ pdf_recibido_por_operacion = {}
 imagenes_procesadas_recientes = []
 
 async def mapear_motores_por_id():
-    global entidad_franchesco, entidad_ghostops, entidad_north_bot, entidad_kimico
-    global id_franchesco, id_ghostops, id_north_bot, id_kimico
+    global entidad_franchesco, entidad_friurus, entidad_ghostops, entidad_north_bot, entidad_kimico, entidad_xsdox
+    global id_franchesco, id_friurus, id_ghostops, id_north_bot, id_kimico, id_xsdox
 
     if not client.is_connected():
         await client.connect()
@@ -157,7 +170,12 @@ async def mapear_motores_por_id():
                 id_franchesco = dialog.id
                 print(f"🎯 ID Franchesco Fijado: {id_franchesco} ({dialog.name})")
 
-            elif TXT_GHOSTOPS in nombre_chat_upper and not entidad_ghostops:
+            elif TXT_FRIURUS in nombre_chat_upper and not entidad_friurus:
+                entidad_friurus = dialog.input_entity
+                id_friurus = dialog.id
+                print(f"🎯 ID Friurus Data Fijado: {id_friurus} ({dialog.name})")
+
+            elif TXT_GHOSTOPS and TXT_GHOSTOPS in nombre_chat_upper and not entidad_ghostops:
                 entidad_ghostops = dialog.input_entity
                 id_ghostops = dialog.id
                 print(f"🎯 ID DF VIP [GRUPO 08] Fijado: {id_ghostops} ({dialog.name})")
@@ -165,7 +183,12 @@ async def mapear_motores_por_id():
             elif nombre_chat_upper == TXT_KIMICO and not entidad_kimico:
                 entidad_kimico = dialog.input_entity
                 id_kimico = dialog.id
-                print(f"🎯 ID KIMICO Fijado: {id_kimico} ({dialog.name})")
+                print(f"🎯 ID KIMICO DOX Fijado: {id_kimico} ({dialog.name})")
+
+            elif nombre_chat_upper == TXT_XSDOX and not entidad_xsdox:
+                entidad_xsdox = dialog.input_entity
+                id_xsdox = dialog.id
+                print(f"🎯 ID XS DOX VIP Fijado: {id_xsdox} ({dialog.name})")
 
     try:
         entidad_north_bot = await client.get_input_entity(USER_NORTH_BOT)
@@ -239,6 +262,19 @@ async def timeout_seguridad_operacion(clave_operacion, segundos=90):
         print(f"⏱️ [TIME-OUT] Forzando liberación de [{clave_operacion}] ({segundos}s).")
         liberar_operacion_de_memoria(clave_operacion)
 
+def motor_activo(nombre_motor):
+    """False si el grupo está desactivado o no se encontró al arrancar:
+    así la operación no se queda esperando una respuesta que nunca llegará."""
+    entidades = {
+        "DF VIP": entidad_ghostops,
+        "FRANCHESCO": entidad_franchesco,
+        "FRIURUS DATA": entidad_friurus,
+        "NORTH DATA": entidad_north_bot,
+        "KIMICO": entidad_kimico,
+        "XS DOX VIP": entidad_xsdox,
+    }
+    return entidades.get(nombre_motor, True) is not None
+
 def verificar_y_marcar_respuesta(clave_operacion, motor):
     global control_operaciones
     if clave_operacion not in control_operaciones:
@@ -248,7 +284,8 @@ def verificar_y_marcar_respuesta(clave_operacion, motor):
         control_operaciones[clave_operacion]["motores"][motor] = True
         print(f"📊 [PROGRESO {clave_operacion}]: {motor} -> ✅ REGISTRADO.")
 
-    if all(control_operaciones[clave_operacion]["motores"].values()):
+    motores = control_operaciones[clave_operacion]["motores"]
+    if all(listo or not motor_activo(nombre) for nombre, listo in motores.items()):
         liberar_operacion_de_memoria(clave_operacion)
 
 # =====================================================================
@@ -278,6 +315,8 @@ def recibir_orden_docs(message):
         if loop_principal:
             asyncio.run_coroutine_threadsafe(client.send_message(entidad_ghostops, f"/PARTIDAV {placa}"), loop_principal)
             asyncio.run_coroutine_threadsafe(timeout_seguridad_operacion(clave_operacion, 90), loop_principal)
+    else:
+        bot.reply_to(message, "⚠️ /partida no está disponible por el momento (DF VIP desactivado). Prueba con /partida2 " + placa)
 
 @bot.message_handler(commands=['placa'])
 def recibir_orden_imagenes(message):
@@ -328,18 +367,26 @@ def recibir_orden_tive_global(message):
         "motores": {
             "DF VIP": False,
             "FRANCHESCO": False,
+            "FRIURUS DATA": False,
             "NORTH DATA": False,
-            "KIMICO": False
+            "KIMICO": False,
+            "XS DOX VIP": False
         }
     }
 
     if entidad_franchesco:
         asyncio.run_coroutine_threadsafe(client.send_message(entidad_franchesco, f"/tive {placa}"), loop_principal)
+    if entidad_friurus:
+        asyncio.run_coroutine_threadsafe(client.send_message(entidad_friurus, f"/tive {placa}"), loop_principal)
     if entidad_ghostops:
         asyncio.run_coroutine_threadsafe(client.send_message(entidad_ghostops, f"/tive {placa}"), loop_principal)
 
-    if entidad_kimico:
-        asyncio.run_coroutine_threadsafe(client.send_message(entidad_kimico, f"/pla {placa}"), loop_principal)
+    # Kimico y XS DOX VIP: /tive (PDF de la TIVE)
+    for entidad_k in (entidad_kimico, entidad_xsdox):
+        if entidad_k:
+            # --- /pla DESACTIVADO TEMPORALMENTE (no está funcionando) ---
+            # asyncio.run_coroutine_threadsafe(client.send_message(entidad_k, f"/pla {placa}"), loop_principal)
+            asyncio.run_coroutine_threadsafe(client.send_message(entidad_k, f"/tive {placa}"), loop_principal)
 
     if entidad_north_bot:
         asyncio.run_coroutine_threadsafe(flujo_especial_north(placa, clave_operacion), loop_principal)
@@ -374,18 +421,24 @@ def recibir_orden_boleta_global(message):
         "motores": {
             "DF VIP": False,
             "FRANCHESCO": False,
+            "FRIURUS DATA": False,
             "NORTH DATA": False,
-            "KIMICO": False
+            "KIMICO": False,
+            "XS DOX VIP": False
         }
     }
 
     if entidad_franchesco:
         asyncio.run_coroutine_threadsafe(client.send_message(entidad_franchesco, f"/boi {placa}"), loop_principal)
+    if entidad_friurus:
+        asyncio.run_coroutine_threadsafe(client.send_message(entidad_friurus, f"/bolif {placa}"), loop_principal)
     if entidad_ghostops:
         asyncio.run_coroutine_threadsafe(client.send_message(entidad_ghostops, f"/boi {placa}"), loop_principal)
 
     if entidad_kimico:
         asyncio.run_coroutine_threadsafe(client.send_message(entidad_kimico, f"/boleta {placa}"), loop_principal)
+    if entidad_xsdox:
+        asyncio.run_coroutine_threadsafe(client.send_message(entidad_xsdox, f"/boleta {placa}"), loop_principal)
 
     if entidad_north_bot:
         asyncio.run_coroutine_threadsafe(client.send_message(entidad_north_bot, f"/boleta {placa}"), loop_principal)
@@ -418,12 +471,15 @@ def recibir_orden_partidadni_global(message):
         "msg_carga": msg_carga,
         "motores": {
             "DF VIP": False,
-            "FRANCHESCO": False
+            "FRANCHESCO": False,
+            "FRIURUS DATA": False
         }
     }
 
     if entidad_franchesco:
         asyncio.run_coroutine_threadsafe(client.send_message(entidad_franchesco, f"/propdf {dni}"), loop_principal)
+    if entidad_friurus:
+        asyncio.run_coroutine_threadsafe(client.send_message(entidad_friurus, f"/propdf {dni}"), loop_principal)
     if entidad_ghostops:
         asyncio.run_coroutine_threadsafe(client.send_message(entidad_ghostops, f"/propdf {dni}"), loop_principal)
 
@@ -458,12 +514,15 @@ def recibir_orden_nombre_global(message):
         "msg_carga": msg_carga,
         "motores": {
             "DF VIP": False,
-            "FRANCHESCO": False
+            "FRANCHESCO": False,
+            "FRIURUS DATA": False
         }
     }
 
     if entidad_franchesco:
         asyncio.run_coroutine_threadsafe(client.send_message(entidad_franchesco, f"/nm {nombre_formateado}"), loop_principal)
+    if entidad_friurus:
+        asyncio.run_coroutine_threadsafe(client.send_message(entidad_friurus, f"/nm {nombre_formateado}"), loop_principal)
     if entidad_ghostops:
         asyncio.run_coroutine_threadsafe(client.send_message(entidad_ghostops, f"/nm {nombre_formateado}"), loop_principal)
 
@@ -495,12 +554,15 @@ def recibir_orden_denuncias_global(message):
         "msg_carga": msg_carga,
         "motores": {
             "DF VIP": False,
-            "FRANCHESCO": False
+            "FRANCHESCO": False,
+            "FRIURUS DATA": False
         }
     }
 
     if entidad_franchesco:
         asyncio.run_coroutine_threadsafe(client.send_message(entidad_franchesco, f"/denpla {placa}"), loop_principal)
+    if entidad_friurus:
+        asyncio.run_coroutine_threadsafe(client.send_message(entidad_friurus, f"/denp {placa}"), loop_principal)
     if entidad_ghostops:
         asyncio.run_coroutine_threadsafe(client.send_message(entidad_ghostops, f"/denunv {placa}"), loop_principal)
 
@@ -532,7 +594,8 @@ def recibir_orden_rq_global(message):
         "msg_carga": msg_carga,
         "motores": {
             "NORTH DATA": False,
-            "KIMICO": False
+            "KIMICO": False,
+            "XS DOX VIP": False
         }
     }
 
@@ -541,6 +604,8 @@ def recibir_orden_rq_global(message):
 
     if entidad_kimico:
         asyncio.run_coroutine_threadsafe(client.send_message(entidad_kimico, f"/rqpla {placa}"), loop_principal)
+    if entidad_xsdox:
+        asyncio.run_coroutine_threadsafe(client.send_message(entidad_xsdox, f"/rqpla {placa}"), loop_principal)
 
     asyncio.run_coroutine_threadsafe(timeout_seguridad_operacion(clave_operacion, 90), loop_principal)
 
@@ -565,6 +630,9 @@ def ftp_pedir_pdf(tipo, placa):
     try:
         datos = r.json()
     except ValueError:
+        print(f"⚠️ [FTP] Respuesta no-JSON HTTP {r.status_code}: {r.text[:300]}")
+        if r.status_code == 403 and "cloudflare" in (r.headers.get("server") or "").lower():
+            raise ErrorFiltraTuPlaca("Cloudflare bloqueó la conexión desde el servidor (HTTP 403). Hay que permitir /api/v1/ en Cloudflare.")
         raise ErrorFiltraTuPlaca(f"Respuesta inválida del servidor (HTTP {r.status_code}).")
     if not datos.get("exito"):
         raise ErrorFiltraTuPlaca(datos.get("error") or f"Error HTTP {r.status_code}")
@@ -769,7 +837,7 @@ def arrancar_bot_padre():
 # --- CLIENTE ASÍNCRONO TELETHON ---
 async def main():
     global loop_principal, control_operaciones, north_respondido_exito
-    global id_franchesco, id_ghostops, id_north_bot, id_kimico
+    global id_franchesco, id_friurus, id_ghostops, id_north_bot, id_kimico, id_xsdox
     loop_principal = asyncio.get_running_loop()
 
     await mapear_motores_por_id()
@@ -777,7 +845,7 @@ async def main():
     @client.on(events.NewMessage())
     async def escuchador_global_mensajes(event):
         global chat_id_hugo, control_operaciones, north_respondido_exito
-        global id_franchesco, id_ghostops, id_north_bot, id_kimico
+        global id_franchesco, id_friurus, id_ghostops, id_north_bot, id_kimico, id_xsdox
 
         chat_actual_id = event.chat_id
         if not chat_id_hugo or not control_operaciones:
@@ -785,9 +853,11 @@ async def main():
 
         origen_texto = "DESCONOCIDO"
         if id_franchesco and chat_actual_id == id_franchesco: origen_texto = "FRANCHESCO"
+        elif id_friurus and chat_actual_id == id_friurus: origen_texto = "FRIURUS DATA"
         elif id_ghostops and chat_actual_id == id_ghostops: origen_texto = "DF VIP"
         elif id_north_bot and chat_actual_id == id_north_bot: origen_texto = "NORTH DATA"
         elif id_kimico and chat_actual_id == id_kimico: origen_texto = "KIMICO"
+        elif id_xsdox and chat_actual_id == id_xsdox: origen_texto = "XS DOX VIP"
 
         if origen_texto == "DESCONOCIDO": return
 
@@ -823,7 +893,7 @@ async def main():
                         else:
                             continue
 
-                    if origen_texto in ["NORTH DATA", "KIMICO"]:
+                    if origen_texto in ["NORTH DATA"] + MOTORES_TIPO_KIMICO:
                         if op_data["origen"] in ["TIVE", "BOLETA", "RQ"]:
                             op_encontrada = clave
                             placa_detectada = op_data["placa"]
@@ -834,7 +904,7 @@ async def main():
                                 op_encontrada = clave
                                 placa_detectada = op_data["placa"]
                                 break
-                    elif origen_texto == "FRANCHESCO":
+                    elif origen_texto in MOTORES_TIPO_FRANCHESCO:
                         palabras_validas_franchesco = ["MEXES", "HUGO", "BOLETA", "TIVE", "INFORMATIVA", "PROCESADO", "REGISTRO", "NO SE ENCONTRÓ", "NO SE ENCONTRO", "ERROR", "NO EXISTE", "SIN RESULTADOS"]
                         if any(palabra in texto_a_buscar for palabra in palabras_validas_franchesco):
                             op_encontrada = clave
@@ -871,7 +941,7 @@ async def main():
             return
 
         # Entrega de Fotos
-        elif event.message.media and event.message.photo and origen_texto in ["FRANCHESCO", "NORTH DATA", "KIMICO"]:
+        elif event.message.media and event.message.photo and origen_texto in ["FRANCHESCO", "FRIURUS DATA", "NORTH DATA", "KIMICO", "XS DOX VIP"]:
             comando_origen = control_operaciones[op_encontrada]["origen"]
             caption_proveedor = event.message.message if event.message.message else ""
 
@@ -897,8 +967,8 @@ async def main():
             if origen_texto == "NORTH DATA" and comando_origen == "TIVE":
                 return
 
-            if origen_texto == "FRANCHESCO" and comando_origen in ["TIVE", "BOLETA", "DENUNCIAS"]:
-                verificar_y_marcar_respuesta(op_encontrada, "FRANCHESCO")
+            if origen_texto in MOTORES_TIPO_FRANCHESCO and comando_origen in ["TIVE", "BOLETA", "DENUNCIAS"]:
+                verificar_y_marcar_respuesta(op_encontrada, origen_texto)
                 return
 
             ruta_img = await event.message.download_media(file=f"{placa_detectada}.jpg")
@@ -923,15 +993,15 @@ async def main():
         elif event.message.text:
             texto_grupo = normalizar_unicode(event.message.text).upper()
 
-            if texto_grupo.startswith(('/TIVE', '/TIV', '/PLA', '/PARTI', '/BOI', '/BOLI', '/BOLETA', '/DENPLA', '/DENUNV', '/PROP')) and len(texto_grupo) < 15 and "NO SE" not in texto_grupo:
+            if texto_grupo.startswith(('/TIVE', '/TIV', '/PLA', '/PARTI', '/BOI', '/BOLI', '/BOLETA', '/DENPLA', '/DENP', '/DENUNV', '/PROP')) and len(texto_grupo) < 15 and "NO SE" not in texto_grupo:
                 return
 
             if texto_grupo.strip() == "CMDS" or (texto_grupo.startswith('/') and len(texto_grupo) < 7):
                 return
 
-            if origen_texto == "FRANCHESCO" and "ANTI-SPAM ACTIVADO" in texto_grupo:
+            if origen_texto in MOTORES_TIPO_FRANCHESCO and "ANTI-SPAM ACTIVADO" in texto_grupo:
                 bot.send_message(chat_id_hugo, f"⏳ <b>Alerta [{origen_texto}]:</b>\n\n⚠️ Anti-Spam activo en este proveedor. Espera unos segundos.", parse_mode="HTML")
-                verificar_y_marcar_respuesta(op_encontrada, "FRANCHESCO")
+                verificar_y_marcar_respuesta(op_encontrada, origen_texto)
                 return
 
             palabras_carga = ["BUSCANDO", "PROCESANDO", "ESPERE", "CONSULTANDO", "RECIBIDO", "UN MOMENTO", "BUSQUEDA ACTIVADA", "SOLICITUD RECIBIDA", "CRÉDITOS RESTANTES", "OBTENIENDO LA TIVE", "OBTENIENDO"]
@@ -940,7 +1010,7 @@ async def main():
 
             comando_origen = control_operaciones[op_encontrada]["origen"]
 
-            if origen_texto == "FRANCHESCO":
+            if origen_texto in MOTORES_TIPO_FRANCHESCO:
                 if any(err in texto_grupo for err in ["NO SE ENCONTRÓ", "NO SE ENCONTRO", "ERROR"]):
                     if comando_origen in ["PLACA", "DENUNCIAS"]:
                         msg_carga = control_operaciones[op_encontrada].get("msg_carga")
@@ -1020,7 +1090,7 @@ async def main():
                 else:
                     return
 
-            if origen_texto == "KIMICO":
+            if origen_texto in MOTORES_TIPO_KIMICO:
                 es_error_kimico = any(err in texto_grupo for err in ["NO SE ENCONTRÓ", "NO SE ENCONTRO", "SIN RESULTADOS", "ERROR", "NO EXISTE"])
                 msg_carga = control_operaciones[op_encontrada].get("msg_carga")
 
@@ -1029,6 +1099,9 @@ async def main():
                         try: bot.delete_message(msg_carga.chat.id, msg_carga.message_id)
                         except Exception: pass
                     bot.send_message(chat_id_hugo, f"📢 <b>Respuesta de [{origen_texto}]:</b>\n🏁 Placa/Partida: <code>{placa_detectada}</code>\n\n❌ No se encontró información.", parse_mode="HTML")
+                    # Mientras /pla esté desactivado, en /tive solo se envía un
+                    # comando, así que el error de Kimico sí cierra su parte.
+                    # (Si se reactiva /pla, volver a poner: if comando_origen != "TIVE":)
                     verificar_y_marcar_respuesta(op_encontrada, origen_texto)
                     return
 
@@ -1042,7 +1115,8 @@ async def main():
                     except Exception: pass
 
                 bot.send_message(chat_id_hugo, f"📢 <b>Respuesta de [{origen_texto}]:</b>\n🏁 Placa/Partida: <code>{placa_detectada}</code>\n\n{campos_filtrados}", parse_mode="HTML")
-                verificar_y_marcar_respuesta(op_encontrada, origen_texto)
+                if comando_origen != "TIVE":
+                    verificar_y_marcar_respuesta(op_encontrada, origen_texto)
                 return
 
             texto_original = normalizar_unicode(event.message.text)
